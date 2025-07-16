@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PROMs Data Pipeline</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true });
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <h1>PROMs Data Processing Pipeline</h1>
+  <div class="mermaid">
+  flowchart TD
+    %% Put your Mermaid code here!
+    %% Swimlane: SEFT
+    subgraph SEFT [SEFT Portal]
+        direction TB
+        A1["Data dropped on SEFT portal"]
+    end
+
+    %% Swimlane: ETL (SSIS)
+    subgraph ETL [SSIS Processing]
+        direction TB
+        B1["SSIS package ingests data"]
+        B2[(PROMS_DEVELOPMENT)]
+        B3[(PROMS_PUBLICATION)]
+        B4[(PROMS_App)]
+    end
+
+    %% Swimlane: Linkage & Processing
+    subgraph Processing [Data Processing]
+        direction TB
+        C1["Extract HES subset for relevant procedures"]
+        C2["Deterministic linkage: DoB, sex, postcode"]
+        C3{"Match successful?"}
+        C4["Exclude unmatched records"]
+
+        %% Parallel tasks after successful match
+        C5["Delete previous tables"]
+        C6["Check HES clones / update flags"]
+        C7["Create REF_ORGS and CCG mapping tables"]
+        C8["Filter to eligible cases:\nQ2 complete, linked, complete patient info"]
+        C9["Apply risk adjustment model"]
+
+        C10[(Final_Analytical_Dataset)]
+    end
+
+    %% Swimlane: Publication Outputs
+    subgraph Publication [Public Reporting]
+        direction TB
+        D1["Generate CSVs with Python"]
+        D2["Create PowerBI dashboard"]
+        D3["Aggregate to provider level"]
+        D4["Compare actual vs predicted scores"]
+        D5["Publish statistical output"]
+    end
+
+    %% Swimlane: DARS / NJR
+    subgraph DARS [NJR Submission]
+        direction TB
+        E1["Join questionnaire + provider + HES-matched tables"]
+        E2["Filter to most recent processing run"]
+        E3["Generate DARS export"]
+        E4["Provision dataset to NJR"]
+        E5["Fixes:\n- Removed strict parameter dependencies\n- Adjusted for post-2021 HES structure\n- Unified dataset decoupled from run ID"]
+    end
+
+    %% Connections
+    A1 --> B1
+    B1 --> B2
+    B1 --> B3
+    B1 --> B4
+
+    B4 --> C1
+    C1 --> C2
+    C2 --> C3
+
+    %% Unmatched records directly to publication
+    C3 -- No --> C4
+    C4 --> D1
+
+    %% UPDATED: Parallel tasks for matched records
+    C3 -- Yes --> C5
+    C3 -- Yes --> C6
+    C3 -- Yes --> C7
+    C3 -- Yes --> C8
+    C3 -- Yes --> C9
+
+    %% All parallel tasks feed directly into final dataset
+    C5 --> C10
+    C6 --> C10
+    C7 --> C10
+    C8 --> C10
+    C9 --> C10
+
+    %% Branch 1: Publication
+    C10 --> D1 --> D2 --> D3 --> D4 --> D5
+
+    %% Branch 2: DARS
+    C10 --> E1 --> E2 --> E3 --> E4 --> E5
+
+    %% Custom Colors
+    style SEFT fill:#d4f0fc,stroke:#0388fc,stroke-width:2px
+    style ETL fill:#e7f6d5,stroke:#86b300,stroke-width:2px
+    style Processing fill:#fff4cc,stroke:#ffb300,stroke-width:2px
+    style Publication fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style DARS fill:#ececfd,stroke:#6f42c1,stroke-width:2px
+
+    %% Node Colours (databases)
+    style B2 fill:#d9ead3,stroke:#6aa84f,stroke-width:1px
+    style B3 fill:#d9ead3,stroke:#6aa84f,stroke-width:1px
+    style B4 fill:#d9ead3,stroke:#6aa84f,stroke-width:1px
+    style C10 fill:#f8cecc,stroke:#b85450,stroke-width:1px
+  </div>
+</body>
+</html>
